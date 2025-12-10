@@ -70,13 +70,13 @@ jobs:
     - name: Check Out
       uses: actions/checkout@v4
 
-    - name: Clean Workspace
-      run: |
-        sudo rm -rf /usr/local/lib/android || true
-        sudo rm -rf /usr/share/dotnet || true
-        sudo rm -rf /opt/ghc || true
-        sudo rm -rf "/opt/microsoft/powershell" || true
-        sudo rm -rf /opt/hostedtoolcache || true
+    #- name: Clean Workspace
+     # run: |
+     #   sudo rm -rf /usr/local/lib/android || true
+      #  sudo rm -rf /usr/share/dotnet || true
+      #  sudo rm -rf /opt/ghc || true
+      #  sudo rm -rf "/opt/microsoft/powershell" || true
+      #  sudo rm -rf /opt/hostedtoolcache || true
 
     - name: Install Dependencies (Fixed for Ubuntu 22.04)
       run: |
@@ -95,7 +95,7 @@ jobs:
         libsdl1.2-dev libwxgtk3.0-gtk3-dev libxml2 lzop pngcrush \
         schedtool squashfs-tools rsync libswitch-perl libstdc++6 \
         lib32stdc++6 libc6:i386 libstdc++6:i386 libz1:i386 \
-        openjdk-8-jdk openjdk-8-jre python-is-python2
+        openjdk-8-jdk openjdk-8-jre
         
     - name: Install Java 8 (REQUIRED for Android 7.1)
       run: |
@@ -178,7 +178,7 @@ jobs:
 
     - name: Setup Python 2 (Required for Android 7.1)
       run: |
-        sudo apt-get install -y python-is-python2 python2
+        sudo apt-get install -y python2
         # Setup python2 as default python
         sudo update-alternatives --install /usr/bin/python python /usr/bin/python2 1
         sudo update-alternatives --install /usr/bin/python python /usr/bin/python3 2
