@@ -233,11 +233,11 @@ jobs:
         make clean
         
         # Build recovery
-        if [ "${{ github.event.inputs.BUILD_TARGET }}" = "boot" ]; then
-          make bootimage -j$(($(nproc)/2))
-        else
+        # if [ "${{ github.event.inputs.BUILD_TARGET }}" = "boot" ]; then
+          # make bootimage -j$(($(nproc)/2))
+        # else
           make recoveryimage -j$(($(nproc)/2))
-        fi
+        #fi
         
         # Also try to build recovery zip
         make -j$(($(nproc)/2)) || true
@@ -247,7 +247,7 @@ jobs:
       run: |
         cd ${{ env.workspace }}
         echo "::group::Build Output Directory"
-        find out/target/product/${{ github.event.inputs.DEVICE_NAME }} -type f -name "*.img" -o -name "*.zip" | sort
+        find out/target/product/${{ github.event.inputs.DEVICE_NAME }} -type f -name "*.img" -o -name "*.zip" -o -name "*.tar" | sort
         echo "::endgroup::"
 
     - name: Upload Recovery Image
@@ -258,6 +258,7 @@ jobs:
         path: |
           ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img
           ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.zip
+          ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.tar
         if-no-files-found: error
         retention-days: 7
 
@@ -269,6 +270,7 @@ jobs:
           ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img
           ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*twrp*.zip
           ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.img
+          ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.tar
         name: TWRP-${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_number }}
         tag_name: twrp-${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_number }}
         body: |
