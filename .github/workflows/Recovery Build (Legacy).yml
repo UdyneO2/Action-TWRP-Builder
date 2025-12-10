@@ -1,10 +1,10 @@
-name: Recovery Build (Legacy)
+name: TWRP 7.1 Build (Omni/Legacy)
 
 on:
   workflow_dispatch:
     inputs:
       MANIFEST_URL:
-        description: 'MANIFEST_URL (if want to use SSH keys, use git@github.com:XXXXX)'
+        description: 'MANIFEST_URL'
         required: true
         default: 'https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni'
       MANIFEST_BRANCH:
@@ -26,9 +26,11 @@ on:
       COMMON_TREE_URL:
         description: 'COMMON_TREE_URL (if no common tree, leave blank)'
         required: false
+        default: ''
       COMMON_PATH:
         description: 'COMMON_PATH (if no common tree, leave blank)'
         required: false
+        default: ''
       DEVICE_NAME:
         description: 'DEVICE_NAME'
         required: true
@@ -48,10 +50,13 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
+    strategy:
+      fail-fast: false
+    
     steps:
     - name: Display Run Parameters
       run: |
-        echo "::group::User Environment Variables"
+        echo "::group::Build Parameters"
         echo "Manifest URL: ${{ github.event.inputs.MANIFEST_URL }}"
         echo "Manifest Branch: ${{ github.event.inputs.MANIFEST_BRANCH }}"
         echo "Device Tree URL: ${{ github.event.inputs.DEVICE_TREE_URL }}"
@@ -59,119 +64,243 @@ jobs:
         echo "Device Path: ${{ github.event.inputs.DEVICE_PATH }}"
         echo "Device Name: ${{ github.event.inputs.DEVICE_NAME }}"
         echo "Makefile Name: ${{ github.event.inputs.MAKEFILE_NAME }}"
-        echo "Build Target: ${{ github.event.inputs.BUILD_TARGET }}.img"
+        echo "Build Target: ${{ github.event.inputs.BUILD_TARGET }}"
         echo "::endgroup::"
 
-    # You might want to Checkout your repo first, but not mandatory
     - name: Check Out
       uses: actions/checkout@v4
 
-    # Cleanup The Actions Workspace Using Custom Composite Run Actions
-    - name: Cleanup
-      uses: rokibhasansagar/slimhub_actions@main
-      # That's it! Now use your normal steps
-
-    - name: Prepare the environment
+    - name: Clean Workspace
       run: |
-        sudo apt update && sudo apt upgrade -y
-        DEBIAN_FRONTEND=noninteractive sudo apt install -yq \
-            linux-modules-extra-$(uname -r) \
-            gperf gcc-multilib gcc-10-multilib g++-multilib g++-10-multilib \
-            libc6-dev lib32ncurses-dev x11proto-core-dev libx11-dev tree lib32z-dev libgl1-mesa-dev libxml2-utils \
-            xsltproc bc ccache lib32readline-dev lib32z1-dev liblz4-tool libncurses-dev libsdl1.2-dev \
-            build-essential libgtk-3-dev libglu1-mesa-dev freeglut3-dev git libxml2 lzop pngcrush schedtool squashfs-tools \
-            imagemagick libbz2-dev lzma ncftp qemu-user-static libstdc++-10-dev libncurses6 python3 tar
+        sudo rm -rf /usr/local/lib/android || true
+        sudo rm -rf /usr/share/dotnet || true
+        sudo rm -rf /opt/ghc || true
+        sudo rm -rf "/opt/microsoft/powershell" || true
+        sudo rm -rf /opt/hostedtoolcache || true
 
-    - name: Install OpenJDK
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'zulu'
-        java-version: '11'
+    - name: Install Dependencies (Android 7.1)
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y \
+          git-core gnupg flex bison build-essential zip curl zlib1g-dev \
+          gcc-multilib g++-multilib gcc-10-multilib g++-10-multilib \
+          libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev \
+          lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip \
+          fontconfig python2 python3 adb fastboot bc ccache \
+          liblz4-tool libncurses5 libssl-dev libsdl1.2-dev \
+          libwxgtk3.0-gtk3-dev libxml2 lzop pngcrush schedtool \
+          squashfs-tools zip zlib1g-dev libswitch-perl rsync \
+          lib32stdc++6 lib32z1 libc6-dev-i386 lib32ncurses5-dev \
+          libx11-dev:i386
 
-    - name: Setup SSH Keys
-      if: ${{ startsWith(github.event.inputs.MANIFEST_URL, 'git@github.com') || 
-          startsWith(github.event.inputs.DEVICE_TREE_URL, 'git@github.com') ||
-          startsWith(github.event.inputs.COMMON_TREE_URL, 'git@github.com') }}
+    - name: Install Java 8 (REQUIRED for Android 7.1)
+      run: |
+        sudo apt-get install -y openjdk-8-jdk openjdk-8-jre
+        sudo update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+        sudo update-alternatives --set javac /usr/lib/jvm/java-8-openjdk-amd64/bin/javac
+        echo "JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> $GITHUB_ENV
+        echo "PATH=/usr/lib/jvm/java-8-openjdk-amd64/bin:$PATH" >> $GITHUB_ENV
+
+    - name: Verify Java Version
+      run: |
+        echo "Java version:"
+        java -version
+        echo "Javac version:"
+        javac -version
+        echo "JAVA_HOME: $JAVA_HOME"
+
+    - name: Setup SSH Keys (if using SSH URLs)
+      if: ${{ startsWith(github.event.inputs.MANIFEST_URL, 'git@') || 
+            startsWith(github.event.inputs.DEVICE_TREE_URL, 'git@') ||
+            (github.event.inputs.COMMON_TREE_URL != '' && startsWith(github.event.inputs.COMMON_TREE_URL, 'git@')) }}
       uses: webfactory/ssh-agent@v0.9.0
       with:
-          ssh-private-key: |
-            ${{ secrets.SSH_PRIVATE_KEY }}
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-    - name: Install repo
+    - name: Install repo tool
       run: |
-        mkdir ~/bin
-        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+        mkdir -p ~/bin
+        curl -s https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
         chmod a+x ~/bin/repo
-        sudo ln -sf ~/bin/repo /usr/bin/repo
+        sudo cp ~/bin/repo /usr/local/bin/
+        echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
 
-    - name: Initialize repo
+    - name: Initialize Workspace
       run: |
-        mkdir workspace
-        cd workspace
-        echo "workspace-folder=$(pwd)" >> $GITHUB_OUTPUT
-        git config --global user.name "azwhikaru"
-        git config --global user.email "azwhikaru+37921907@github.com"
-        repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
-      id: pwd
+        mkdir -p twrp-build
+        cd twrp-build
+        echo "workspace=$(pwd)" >> $GITHUB_ENV
+        git config --global user.name "github-actions"
+        git config --global user.email "github-actions@github.com"
+        git config --global color.ui false
+        
+        # Initialize repo with minimal sync
+        repo init \
+          -u ${{ github.event.inputs.MANIFEST_URL }} \
+          -b ${{ github.event.inputs.MANIFEST_BRANCH }} \
+          --depth=1 \
+          --groups=all,-notdefault,-device,-darwin,-x86,-mips,-exynos5
 
-    - name: Repo Sync
+    - name: Sync Repository
       run: |
-        repo sync -j$(nproc --all) --force-sync
-      working-directory: workspace
+        cd ${{ env.workspace }}
+        repo sync -c -j$(nproc --all) \
+          --force-sync \
+          --no-clone-bundle \
+          --no-tags \
+          --optimized-fetch
+      timeout-minutes: 30
 
-    - name: Clone device tree
+    - name: Clone Device Tree
       run: |
-        git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+        cd ${{ env.workspace }}
+        mkdir -p $(dirname ${{ github.event.inputs.DEVICE_PATH }})
+        git clone \
+          ${{ github.event.inputs.DEVICE_TREE_URL }} \
+          -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} \
+          ${{ github.event.inputs.DEVICE_PATH }} \
+          --depth=1
 
-    - name: Clone common tree
-      if: |
-        github.event.inputs.COMMON_TREE_URL != null
-        && github.event.inputs.COMMON_PATH != null
+    - name: Clone Common Tree (if provided)
+      if: ${{ github.event.inputs.COMMON_TREE_URL != '' && github.event.inputs.COMMON_PATH != '' }}
       run: |
-        git clone ${{ github.event.inputs.COMMON_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.COMMON_PATH }}
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+        cd ${{ env.workspace }}
+        mkdir -p $(dirname ${{ github.event.inputs.COMMON_PATH }})
+        git clone \
+          ${{ github.event.inputs.COMMON_TREE_URL }} \
+          -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} \
+          ${{ github.event.inputs.COMMON_PATH }} \
+          --depth=1
 
-    - name: Sync Device Dependencies
+    - name: Setup Python 2 (Required for Android 7.1)
       run: |
-        bash ${GITHUB_WORKSPACE}/scripts/convert.sh ${{ github.event.inputs.DEVICE_PATH }}/${{ steps.buildtree.outputs.value }}.dependencies
-        repo sync -j$(nproc --all)
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
-      continue-on-error: true
+        sudo apt-get install -y python-is-python2 python2
+        # Setup python2 as default python
+        sudo update-alternatives --install /usr/bin/python python /usr/bin/python2 1
+        sudo update-alternatives --install /usr/bin/python python /usr/bin/python3 2
+        sudo update-alternatives --set python /usr/bin/python2
+        python --version
 
-    - name: Set Swap Space
+    - name: Set Swap Space (for low RAM)
       uses: pierotofy/set-swap-space@master
       with:
-        swap-size-gb: 12
+        swap-size-gb: 8
 
-    - name: Switch to Python2
+    - name: Setup Build Environment
       run: |
-        sudo apt -y install python
-        sudo apt -y install python2
-        sudo rm -rf /usr/bin/python
-        sudo ln -s /usr/bin/python2 /usr/bin/python
-        # sudo ln -s /usr/bin/python3 /usr/bin/python3
-      continue-on-error: true
+        cd ${{ env.workspace }}
+        source build/envsetup.sh
+        
+        # Set necessary environment variables
+        export ALLOW_MISSING_DEPENDENCIES=true
+        export LC_ALL=C
+        export USE_CCACHE=1
+        export CCACHE_EXEC=$(which ccache)
+        ccache -M 50G
+        ccache -o compression=true
 
-    - name: Building recovery
+    - name: Prepare Device Configuration
       run: |
+        cd ${{ env.workspace }}
+        # Check if device tree has proper setup
+        if [ -f "${{ github.event.inputs.DEVICE_PATH }}/vendorsetup.sh" ]; then
+          echo "vendorsetup.sh exists"
+        else
+          echo "Creating vendorsetup.sh"
+          echo "add_lunch_combo ${{ github.event.inputs.MAKEFILE_NAME }}-eng" > ${{ github.event.inputs.DEVICE_PATH }}/vendorsetup.sh
+        fi
+        
+        # Check BoardConfig.mk
+        if [ ! -f "${{ github.event.inputs.DEVICE_PATH }}/BoardConfig.mk" ]; then
+          echo "ERROR: BoardConfig.mk not found in device tree!"
+          exit 1
+        fi
+
+    - name: Build Recovery
+      run: |
+        cd ${{ env.workspace }}
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
-        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+        
+        # Lunch and build
+        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng
+        
+        # Clean previous builds
+        make clean
+        
+        # Build recovery
+        if [ "${{ github.event.inputs.BUILD_TARGET }}" = "boot" ]; then
+          make bootimage -j$(($(nproc)/2))
+        else
+          make recoveryimage -j$(($(nproc)/2))
+        fi
+        
+        # Also try to build recovery zip
+        make -j$(($(nproc)/2)) || true
+      timeout-minutes: 120
 
-    - name: Upload to Release
+    - name: List Output Files
+      run: |
+        cd ${{ env.workspace }}
+        echo "::group::Build Output Directory"
+        find out/target/product/${{ github.event.inputs.DEVICE_NAME }} -type f -name "*.img" -o -name "*.zip" | sort
+        echo "::endgroup::"
+
+    - name: Upload Recovery Image
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: recovery-${{ github.event.inputs.DEVICE_NAME }}
+        path: |
+          ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img
+          ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.zip
+        if-no-files-found: error
+        retention-days: 7
+
+    - name: Create GitHub Release
+      if: success()
       uses: softprops/action-gh-release@v2
       with:
-        files: | 
-          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img
-          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.zip
-          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*vendor*.img
-        name: ${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
-        tag_name: ${{ github.run_id }}
+        files: |
+          ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img
+          ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*twrp*.zip
+          ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.img
+        name: TWRP-${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_number }}
+        tag_name: twrp-${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_number }}
         body: |
-          Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
-          Device: ${{ github.event.inputs.DEVICE_NAME }}
-          Target: ${{ github.event.inputs.BUILD_TARGET }}.img
+          # TWRP 7.1 Build for ${{ github.event.inputs.DEVICE_NAME }}
+          
+          **Build Information:**
+          - Device: ${{ github.event.inputs.DEVICE_NAME }}
+          - Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
+          - Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          - Workflow Run: #${{ github.run_number }}
+          
+          **Installation:**
+          ```
+          fastboot flash recovery recovery.img
+          # or
+          fastboot boot recovery.img
+          ```
+          
+          **Device Tree:** [${{ github.event.inputs.DEVICE_TREE_URL }}](${{ github.event.inputs.DEVICE_TREE_URL }})
+          
+          **Notes:** Built with Omni TWRP 7.1 legacy sources
+        draft: false
+        prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build Failure Debug
+      if: failure()
+      run: |
+        echo "::group::Build Failure Debug Info"
+        echo "Checking workspace structure..."
+        find ${{ env.workspace }} -type f -name "*.mk" | head -20
+        echo ""
+        echo "Checking device tree..."
+        ls -la ${{ env.workspace }}/${{ github.event.inputs.DEVICE_PATH }}/
+        echo ""
+        echo "Last 50 lines of build log:"
+        find ${{ env.workspace }}/out -name "*.log" -exec tail -50 {} \; 2>/dev/null || echo "No log files found"
+        echo "::endgroup::"
