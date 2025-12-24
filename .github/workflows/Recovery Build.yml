@@ -109,9 +109,9 @@ jobs:
         mkdir workspace
         cd workspace
         echo "workspace-folder=$(pwd)" >> $GITHUB_OUTPUT
-        git config --global user.name "Nico170420"
-        git config --global user.email "b170420nc@gmail.com"
-        repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
+        git config --global user.name "mnrdnn"
+        git config --global user.email "udyneos@gmail.com"
+        repo init --depth=1 --no-repo-verify -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }} -g default,-mips,-darwin,-notdefault
       id: pwd
 
     - name: Repo Sync
