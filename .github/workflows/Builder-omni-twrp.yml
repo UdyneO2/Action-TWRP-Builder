@@ -1,4 +1,4 @@
-name: Builder TWRP Legacy (Omni)
+name: Builder omni twrp
 
 on:
   workflow_dispatch:
@@ -78,7 +78,7 @@ jobs:
       #  sudo rm -rf "/opt/microsoft/powershell" || true
       #  sudo rm -rf /opt/hostedtoolcache || true
 
-    - name: Install Dependencies (Fixed for Ubuntu 22.04)
+    - name: Install Dependencies
       run: |
         sudo apt-get update -y
         sudo apt-get install -y software-properties-common
