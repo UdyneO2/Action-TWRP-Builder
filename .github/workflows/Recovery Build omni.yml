@@ -1,4 +1,4 @@
-name: TWRP 7.1 Build (Omni/Legacy)
+name: Builder TWRP Legacy (Omni)
 
 on:
   workflow_dispatch:
@@ -97,7 +97,7 @@ jobs:
         lib32stdc++6 libc6:i386 libstdc++6:i386 libz1:i386 \
         openjdk-8-jdk openjdk-8-jre
         
-    - name: Install Java 8 (REQUIRED for Android 7.1)
+    - name: Install Java 8 
       run: |
         sudo apt-get install -y openjdk-8-jdk openjdk-8-jre
         sudo update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
@@ -135,7 +135,7 @@ jobs:
         cd twrp-build
         echo "workspace=$(pwd)" >> $GITHUB_ENV
         git config --global user.name "github-actions"
-        git config --global user.email "github-actions@github.com"
+        git config --global user.email "udyneos@github.com"
         git config --global color.ui false
         
         # Initialize repo with minimal sync
@@ -176,7 +176,7 @@ jobs:
           ${{ github.event.inputs.COMMON_PATH }} \
           --depth=1
 
-    - name: Setup Python 2 (Required for Android 7.1)
+    - name: Setup Python 2 
       run: |
         sudo apt-get install -y python2
         # Setup python2 as default python
@@ -185,10 +185,10 @@ jobs:
         sudo update-alternatives --set python /usr/bin/python2
         python --version
 
-    - name: Set Swap Space (for low RAM)
+    - name: Set Swap Space
       uses: pierotofy/set-swap-space@master
       with:
-        swap-size-gb: 8
+        swap-size-gb: 12
 
     - name: Setup Build Environment
       run: |
@@ -233,11 +233,11 @@ jobs:
         make clean
         
         # Build recovery
-        # if [ "${{ github.event.inputs.BUILD_TARGET }}" = "boot" ]; then
-          # make bootimage -j$(($(nproc)/2))
-        # else
+        if [ "${{ github.event.inputs.BUILD_TARGET }}" = "boot" ]; then
+          make bootimage -j$(($(nproc)/2))
+        else
           make recoveryimage -j$(($(nproc)/2))
-        #fi
+        fi
         
         # Also try to build recovery zip
         make -j$(($(nproc)/2)) || true
@@ -267,20 +267,19 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img
           ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*twrp*.zip
           ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.img
           ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.tar
+          
         name: TWRP-${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_number }}
-        tag_name: twrp-${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_number }}
+        tag_name: twrp-${{ github.event.inputs.DEVICE_NAME }}
         body: |
-          # TWRP 7.1 Build for ${{ github.event.inputs.DEVICE_NAME }}
+          # TWRP ${{  github.event.inputs.DEVICE_TREE_BRANCH }} Build for ${{ github.event.inputs.DEVICE_NAME }}
           
           **Build Information:**
           - Device: ${{ github.event.inputs.DEVICE_NAME }}
           - Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
           - Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-          - Workflow Run: #${{ github.run_number }}
           
           **Installation:**
           ```
@@ -291,7 +290,7 @@ jobs:
           
           **Device Tree:** [${{ github.event.inputs.DEVICE_TREE_URL }}](${{ github.event.inputs.DEVICE_TREE_URL }})
           
-          **Notes:** Built with Omni TWRP 7.1 legacy sources
+          **Notes:** Built by Github.
         draft: false
         prerelease: false
       env:
