@@ -1,176 +1,209 @@
-name: Recovery Build
+name: Recovery Builder
 
 on:
   workflow_dispatch:
     inputs:
       MANIFEST_URL:
-        description: 'MANIFEST_URL (if want to use SSH keys, use git@github.com:XXXXX)'
+        description: 'Recovery Manifest URL'
         required: true
         default: 'https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp'
       MANIFEST_BRANCH:
-        description: 'MANIFEST_BRANCH'
+        description: 'Manifest Branch'
         required: true
         default: 'twrp-12.1'
       DEVICE_TREE_URL:
-        description: 'DEVICE_TREE_URL'
+        description: 'Device Tree URL'
         required: true
         default: 'https://github.com/TeamWin/android_device_asus_I003D'
       DEVICE_TREE_BRANCH:
-        description: 'DEVICE_TREE_BRANCH'
+        description: 'Device Tree Branch'
         required: true
         default: 'android-12.1'
       DEVICE_PATH:
-        description: 'DEVICE_PATH'
+        description: 'Device Path in source'
         required: true
         default: 'device/asus/I003D'
-      COMMON_TREE_URL:
-        description: 'COMMON_TREE_URL (if no common tree, leave blank)'
-        required: false
-      COMMON_PATH:
-        description: 'COMMON_PATH (if no common tree, leave blank)'
-        required: false
       DEVICE_NAME:
-        description: 'DEVICE_NAME'
+        description: 'Device Codename'
         required: true
         default: 'I003D'
-      MAKEFILE_NAME:
-        description: 'MAKEFILE_NAME'
+      MAKE_TARGET:
+        description: 'Make target'
         required: true
-        default: 'twrp_I003D'
-      BUILD_TARGET:
-        description: 'BUILD_TARGET'
+        default: 'recoveryimage'
+      DEVICE_MODEL:
+        description: 'Device Model Name (e.g., ASUS ROG Phone 3)'
         required: true
-        default: 'recovery'
+        default: 'ASUS I003D'
+
+env:
+  BUILD_START_TIME: ''
 
 jobs:
   build:
-    if: github.event.repository.owner.id == github.event.sender.id
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
+    
     steps:
-    - name: Display Run Parameters
+    - name: Start build timer
       run: |
-        echo "::group::User Environment Variables"
-        echo "Manifest URL: ${{ github.event.inputs.MANIFEST_URL }}"
-        echo "Manifest Branch: ${{ github.event.inputs.MANIFEST_BRANCH }}"
-        echo "Device Tree URL: ${{ github.event.inputs.DEVICE_TREE_URL }}"
-        echo "Device Tree Branch: ${{ github.event.inputs.DEVICE_TREE_BRANCH }}"
-        echo "Device Path: ${{ github.event.inputs.DEVICE_PATH }}"
-        echo "Device Name: ${{ github.event.inputs.DEVICE_NAME }}"
-        echo "Makefile Name: ${{ github.event.inputs.MAKEFILE_NAME }}"
-        echo "Build Target: ${{ github.event.inputs.BUILD_TARGET }}.img"
-        echo "::endgroup::"
+        echo "BUILD_START_TIME=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_ENV
+        echo "BUILD_TIMESTAMP=$(date +%s)" >> $GITHUB_ENV
 
-    # You might want to Checkout your repo first, but not mandatory
-    - name: Check Out
+    - name: Checkout scripts
       uses: actions/checkout@v4
-
-    # Cleanup The Actions Workspace Using Custom Composite Run Actions
+      with:
+        path: scripts
+   # Cleanup The Actions Workspace Using Custom Composite Run Actions
     - name: Cleanup
       uses: rokibhasansagar/slimhub_actions@main
       # That's it! Now use your normal steps
 
-    - name: Prepare the environment
+    - name: Install dependencies
       run: |
-        sudo apt update && sudo apt upgrade -y
-        DEBIAN_FRONTEND=noninteractive sudo apt install -yq \
-            linux-modules-extra-$(uname -r) \
-            gperf gcc-multilib gcc-10-multilib g++-multilib g++-10-multilib \
-            libc6-dev lib32ncurses-dev x11proto-core-dev libx11-dev tree lib32z-dev libgl1-mesa-dev libxml2-utils \
-            xsltproc bc ccache lib32readline-dev lib32z1-dev liblz4-tool libncurses-dev libsdl1.2-dev \
-            build-essential libgtk-3-dev libglu1-mesa-dev freeglut3-dev git libxml2 lzop pngcrush schedtool squashfs-tools \
-            imagemagick libbz2-dev lzma ncftp qemu-user-static libstdc++-10-dev libncurses6 python3 tar
+        sudo apt-get update
+        sudo apt-get install -y \
+          git-core gnupg flex bison build-essential zip curl zlib1g-dev \
+          gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev \
+          lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip \
+          python3 ccache rsync schedtool squashfs-tools
 
-    - name: Install OpenJDK
+    - name: Setup Java
       uses: actions/setup-java@v4
       with:
-        distribution: 'zulu'
+        distribution: 'temurin'
         java-version: '11'
-
-    - name: Setup SSH Keys
-      if: ${{ startsWith(github.event.inputs.MANIFEST_URL, 'git@github.com') || 
-          startsWith(github.event.inputs.DEVICE_TREE_URL, 'git@github.com') ||
-          startsWith(github.event.inputs.COMMON_TREE_URL, 'git@github.com') }}
-      uses: webfactory/ssh-agent@v0.9.0
-      with:
-          ssh-private-key: |
-            ${{ secrets.SSH_PRIVATE_KEY }}
-
-    - name: Install repo
+        cache: 'gradle'
+        
+    - name: Setup ccache
       run: |
-        mkdir ~/bin
-        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-        chmod a+x ~/bin/repo
-        sudo ln -sf ~/bin/repo /usr/bin/repo
+        ccache -M 20G
+        ccache -o compression=true
+        ccache -z
 
-    - name: Initialize repo
+    - name: Setup repo tool
       run: |
-        mkdir workspace
-        cd workspace
-        echo "workspace-folder=$(pwd)" >> $GITHUB_OUTPUT
-        git config --global user.name "mnrdnn"
-        git config --global user.email "udyneos@gmail.com"
-        repo init --depth=1 --no-repo-verify -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }} -g default,-mips,-darwin,-notdefault
-      id: pwd
+        sudo curl -sLo /usr/local/bin/repo https://storage.googleapis.com/git-repo-downloads/repo
+        sudo chmod a+x /usr/local/bin/repo
 
-    - name: Repo Sync
+    - name: Initialize workspace
       run: |
-        repo sync -j$(nproc --all) --force-sync
-      working-directory: workspace
+        mkdir -p twrp-build
+        cd twrp-build
+        repo init \
+          --depth=1 \
+          -u ${{ github.event.inputs.MANIFEST_URL }} \
+          -b ${{ github.event.inputs.MANIFEST_BRANCH }} \
+          --groups=all,-notdefault
+
+    - name: Sync source
+      run: |
+        cd twrp-build
+        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle
 
     - name: Clone device tree
       run: |
-        git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+        cd twrp-build
+        rm -rf ${{ github.event.inputs.DEVICE_PATH }}
+        git clone \
+          --depth=1 \
+          --branch ${{ github.event.inputs.DEVICE_TREE_BRANCH }} \
+          ${{ github.event.inputs.DEVICE_TREE_URL }} \
+          ${{ github.event.inputs.DEVICE_PATH }}
 
-    - name: Clone common tree
-      if: |
-        github.event.inputs.COMMON_TREE_URL != null
-        && github.event.inputs.COMMON_PATH != null
+    - name: Build TWRP
       run: |
-        git clone ${{ github.event.inputs.COMMON_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.COMMON_PATH }}
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
-
-    - name: Check Build Tree
-      uses: haya14busa/action-cond@v1
-      id: buildtree
-      with:
-        cond: ${{ github.event.inputs.MANIFEST_BRANCH == 'twrp-11' || github.event.inputs.MANIFEST_BRANCH == 'twrp-12.1' }}
-        if_true: twrp
-        if_false: omni
-
-    - name: Sync Device Dependencies
-      run: |
-        bash ${GITHUB_WORKSPACE}/scripts/convert.sh ${{ github.event.inputs.DEVICE_PATH }}/${{ steps.buildtree.outputs.value }}.dependencies
-        repo sync -j$(nproc --all)
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
-      continue-on-error: true
-
-    - name: Set Swap Space
-      uses: pierotofy/set-swap-space@master
-      with:
-        swap-size-gb: 5
-
-    - name: Building recovery
-      run: |
+        cd twrp-build
+        export USE_CCACHE=1
+        export CCACHE_EXEC=/usr/bin/ccache
+        export CCACHE_DIR=/tmp/ccache
+        
         source build/envsetup.sh
-        export ALLOW_MISSING_DEPENDENCIES=true
-        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+        lunch twrp_${{ github.event.inputs.DEVICE_NAME }}-eng
+        make clean
+        make ${{ github.event.inputs.MAKE_TARGET }} -j$(nproc --all)
 
-    - name: Upload to Release
+        ccache -s
+
+    - name: Get build information
+      id: build_info
+      run: |
+        BUILD_END_TIME=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
+        BUILD_END_TIMESTAMP=$(date +%s)
+        BUILD_DURATION=$((BUILD_END_TIMESTAMP - ${{ env.BUILD_TIMESTAMP }}))
+        
+        # Format duration
+        if [ $BUILD_DURATION -lt 60 ]; then
+          DURATION_STR="${BUILD_DURATION} seconds"
+        elif [ $BUILD_DURATION -lt 3600 ]; then
+          minutes=$((BUILD_DURATION / 60))
+          seconds=$((BUILD_DURATION % 60))
+          DURATION_STR="${minutes}m ${seconds}s"
+        else
+          hours=$((BUILD_DURATION / 3600))
+          minutes=$(( (BUILD_DURATION % 3600) / 60 ))
+          seconds=$((BUILD_DURATION % 60))
+          DURATION_STR="${hours}h ${minutes}m ${seconds}s"
+        fi
+        
+        echo "BUILD_END_TIME=${BUILD_END_TIME}" >> $GITHUB_ENV
+        echo "BUILD_DURATION=${DURATION_STR}" >> $GITHUB_ENV
+        
+        # Get file info
+        RECOVERY_FILE="twrp-build/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img"
+        if [ -f "$RECOVERY_FILE" ]; then
+          FILE_SIZE=$(ls -lh "$RECOVERY_FILE" | awk '{print $5}')
+          echo "FILE_SIZE=${FILE_SIZE}" >> $GITHUB_ENV
+        else
+          echo "FILE_SIZE=Not found" >> $GITHUB_ENV
+        fi
+
+    - name: Upload recovery image
+      uses: actions/upload-artifact@v4
+      with:
+        name: twrp-${{ github.event.inputs.DEVICE_NAME }}
+        path: twrp-build/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img
+
+    - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        files: | 
-          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img
-          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.zip
-          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*vendor*.img
-        name: ${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
-        tag_name: ${{ github.run_id }}
+        files: twrp-build/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img
+        name: TWRP ${{ github.event.inputs.DEVICE_MODEL }}
+        tag_name: twrp-${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_number }}
         body: |
-          Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
-          Device: ${{ github.event.inputs.DEVICE_NAME }}
-          Target: ${{ github.event.inputs.BUILD_TARGET }}.img
+          # 📱 TWRP Recovery for ${{ github.event.inputs.DEVICE_MODEL }}
+          
+          ## 📋 Device Information
+          **Device Codename:** `${{ github.event.inputs.DEVICE_NAME }}`  
+          **Device Model:** ${{ github.event.inputs.DEVICE_MODEL }}  
+          **File Size:** ${{ env.FILE_SIZE }}  
+          
+          ## 🛠️ Build Information
+          **Build ID:** `${{ github.run_number }}`  
+          **Build Started:** ${{ env.BUILD_START_TIME }}  
+          **Build Finished:** ${{ env.BUILD_END_TIME }}  
+          **Build Duration:** ${{ env.BUILD_DURATION }}  
+          
+          **TWRP Manifest:** `${{ github.event.inputs.MANIFEST_BRANCH }}`  
+          **Device Tree:** [${{ github.event.inputs.DEVICE_TREE_BRANCH }}](${{ github.event.inputs.DEVICE_TREE_URL }})  
+          **Build Target:** `${{ github.event.inputs.MAKE_TARGET }}`  
+          
+          ## 📥 Installation
+          1. Boot your device to fastboot mode
+          2. Flash using:  
+             ```bash
+             fastboot flash recovery recovery.img
+             ```
+          3. Reboot to recovery:  
+             ```bash
+             fastboot reboot recovery
+             ```
+          
+          ## ⚠️ Important Notes
+          - Always backup your data before flashing
+          - This is an unofficial/community build
+          - Use at your own risk
+          
+          ---
+          *Built automatically via GitHub Actions • [View Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
