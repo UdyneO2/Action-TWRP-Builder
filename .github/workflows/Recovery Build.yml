@@ -6,35 +6,39 @@ on:
       MANIFEST_URL:
         description: 'Recovery Manifest URL'
         required: true
-        default: 'https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp'
+        default: 'https://github.com/PitchBlackRecoveryProject/manifest_pb'
       MANIFEST_BRANCH:
         description: 'Manifest Branch'
         required: true
-        default: 'twrp-12.1'
+        default: 'android-12.1'
       DEVICE_TREE_URL:
         description: 'Device Tree URL'
         required: true
-        default: 'https://github.com/TeamWin/android_device_asus_I003D'
+        default: 'https://github.com/udyneos-prjkt/twrp_tree_mt6768'
       DEVICE_TREE_BRANCH:
         description: 'Device Tree Branch'
         required: true
-        default: 'android-12.1'
+        default: 'pbrp'
       DEVICE_PATH:
         description: 'Device Path in source'
         required: true
-        default: 'device/asus/I003D'
+        default: 'device/xiaomi/lancelot'
       DEVICE_NAME:
         description: 'Device Codename'
         required: true
-        default: 'I003D'
+        default: 'lancelot'
+      BTARGET:
+        description: 'Device target'
+        required: true
+        default: 'pb_lancelot'
       MAKE_TARGET:
         description: 'Make target'
         required: true
         default: 'recoveryimage'
       DEVICE_MODEL:
-        description: 'Device Model Name (e.g., ASUS ROG Phone 3)'
+        description: 'Device Model Name'
         required: true
-        default: 'ASUS I003D'
+        default: 'Redmi 9'
 
 env:
   BUILD_START_TIME: ''
@@ -76,6 +80,7 @@ jobs:
         
     - name: Setup ccache
       run: |
+        CCACHE_DIR=/tmp/ccache
         ccache -M 20G
         ccache -o compression=true
         ccache -z
@@ -114,11 +119,11 @@ jobs:
       run: |
         cd twrp-build
         export USE_CCACHE=1
-        export CCACHE_EXEC=/usr/bin/ccache
+        export CCACHE_EXEC=$(which ccache)
         export CCACHE_DIR=/tmp/ccache
         
         source build/envsetup.sh
-        lunch twrp_${{ github.event.inputs.DEVICE_NAME }}-eng
+        lunch ${{ github.event.inputs.BTARGET }}-eng
         make clean
         make ${{ github.event.inputs.MAKE_TARGET }} -j$(nproc --all)
 
