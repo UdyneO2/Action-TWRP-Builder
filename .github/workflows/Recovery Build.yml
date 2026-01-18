@@ -48,18 +48,13 @@ jobs:
     runs-on: ubuntu-24.04
     
     steps:
-    - name: Start build timer
-      run: |
-        echo "BUILD_START_TIME=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_ENV
-        echo "BUILD_TIMESTAMP=$(date +%s)" >> $GITHUB_ENV
-
     - name: Checkout scripts
       uses: actions/checkout@v4
       with:
         path: scripts
-   # Cleanup The Actions Workspace Using Custom Composite Run Actions
-    - name: Cleanup
-      uses: rokibhasansagar/slimhub_actions@main
+    # Cleanup The Actions Workspace Using Custom Composite Run Actions
+    #- name: Cleanup
+      #uses: rokibhasansagar/slimhub_actions@main
       # That's it! Now use your normal steps
 
     - name: Prepare the environment
@@ -73,12 +68,11 @@ jobs:
             build-essential libgtk-3-dev libglu1-mesa-dev freeglut3-dev git libxml2 lzop pngcrush schedtool squashfs-tools \
             imagemagick libbz2-dev lzma ncftp qemu-user-static libstdc++-10-dev libncurses6 python3 tar ccache
 
-    - name: Setup Java
+    - name: Install OpenJDK
       uses: actions/setup-java@v4
       with:
-        distribution: 'temurin'
+        distribution: 'zulu'
         java-version: '11'
-        cache: 'gradle'
         
     - name: Setup ccache
       run: |
@@ -120,6 +114,8 @@ jobs:
     - name: Build TWRP
       run: |
         cd twrp-build
+        echo "BUILD_START_TIME=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_ENV
+        echo "BUILD_TIMESTAMP=$(date +%s)" >> $GITHUB_ENV
         export USE_CCACHE=1
         export CCACHE_EXEC=$(which ccache)
         export CCACHE_DIR=/tmp/ccache
@@ -127,8 +123,7 @@ jobs:
         source build/envsetup.sh
         lunch ${{ github.event.inputs.BTARGET }}-eng
         make clean
-        make ${{ github.event.inputs.MAKE_TARGET }} -j$(nproc --all)
-
+        make ${{ github.event.inputs.MAKE_TARGET }} -j$(($(nproc --all) * 2))
         ccache -s
 
     - name: Get build information
@@ -167,17 +162,17 @@ jobs:
     - name: Upload recovery image
       uses: actions/upload-artifact@v4
       with:
-        name: twrp-${{ github.event.inputs.DEVICE_NAME }}
+        name: recovery-${{ github.event.inputs.DEVICE_NAME }}
         path: twrp-build/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         files: twrp-build/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img
-        name: TWRP ${{ github.event.inputs.DEVICE_MODEL }}
-        tag_name: twrp-${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_number }}
+        name: Recovery ${{ github.event.inputs.DEVICE_MODEL }}
+        tag_name: recovery-${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_number }}
         body: |
-          # 📱 TWRP Recovery for ${{ github.event.inputs.DEVICE_MODEL }}
+          # 📱 Recovery for ${{ github.event.inputs.DEVICE_MODEL }}
           
           ## 📋 Device Information
           **Device Codename:** `${{ github.event.inputs.DEVICE_NAME }}`  
@@ -190,7 +185,7 @@ jobs:
           **Build Finished:** ${{ env.BUILD_END_TIME }}  
           **Build Duration:** ${{ env.BUILD_DURATION }}  
           
-          **TWRP Manifest:** `${{ github.event.inputs.MANIFEST_BRANCH }}`  
+          **Manifest:** `${{ github.event.inputs.MANIFEST_BRANCH }}`  
           **Device Tree:** [${{ github.event.inputs.DEVICE_TREE_BRANCH }}](${{ github.event.inputs.DEVICE_TREE_URL }})  
           **Build Target:** `${{ github.event.inputs.MAKE_TARGET }}`  
           
