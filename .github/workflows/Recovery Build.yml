@@ -99,12 +99,16 @@ jobs:
           --depth=1 \
           -u ${{ github.event.inputs.MANIFEST_URL }} \
           -b ${{ github.event.inputs.MANIFEST_BRANCH }} \
-          --groups=all,-notdefault
-
+          --groups=all,-notdefault,-device,-darwin,-x86,-mips,-exynos5
+          
     - name: Sync source
       run: |
         cd twrp-build
-        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle
+        repo sync -c -j$(nproc --all) \
+          --force-sync \
+          --no-clone-bundle \
+          --no-tags \
+          --optimized-fetch
 
     - name: Clone device tree
       run: |
