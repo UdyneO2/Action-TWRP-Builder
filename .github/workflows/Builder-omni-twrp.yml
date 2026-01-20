@@ -70,13 +70,9 @@ jobs:
     - name: Check Out
       uses: actions/checkout@v4
 
-    #- name: Clean Workspace
-     # run: |
-     #   sudo rm -rf /usr/local/lib/android || true
-      #  sudo rm -rf /usr/share/dotnet || true
-      #  sudo rm -rf /opt/ghc || true
-      #  sudo rm -rf "/opt/microsoft/powershell" || true
-      #  sudo rm -rf /opt/hostedtoolcache || true
+    - name: Cleanup
+      uses: rokibhasansagar/slimhub_actions@main
+      # That's it! Now use your normal steps
 
     - name: Install Dependencies
       run: |
