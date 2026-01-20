@@ -173,7 +173,7 @@ jobs:
         
         # Get file info
         RECOVERY_FILE="twrp-build/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img"
-        BUILDFILE=$(find twrp-build/out/target/product/${{ github.event.inputs.DEVICE_NAME }}}/*.zip)
+        BUILDFILE=$(find twrp-build/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.zip)
         echo "BUILDFILE=${BUILDFILE}" >> $GITHUB_ENV
         
         if [ -f "$RECOVERY_FILE" ]; then
