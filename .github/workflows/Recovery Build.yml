@@ -133,8 +133,8 @@ jobs:
         
         source build/envsetup.sh
         lunch ${{ github.event.inputs.BTARGET }}-eng
-        BUILD_HOSTNAME := $(shell hostname)
-        BUILD_USERNAME := mnrdnn
+        export BUILD_HOSTNAME=ubuntu
+        export BUILD_USERNAME=mnrdnn
         make clean
         make ${{ github.event.inputs.MAKE_TARGET }} -j$(($(nproc --all) * 2))
         ccache -s
