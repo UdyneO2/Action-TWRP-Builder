@@ -129,12 +129,23 @@ jobs:
         export LC_ALL=C
         export CCACHE_EXEC=$(which ccache)
         export CCACHE_DIR=/tmp/ccache
+        export maintainer=mnrdnn
         
         source build/envsetup.sh
         lunch ${{ github.event.inputs.BTARGET }}-eng
+        BUILD_HOSTNAME := $(shell hostname)
+        BUILD_USERNAME := mnrdnn
         make clean
         make ${{ github.event.inputs.MAKE_TARGET }} -j$(($(nproc --all) * 2))
         ccache -s
+        
+        if [ -z "$BTARGET" == "pb_lancelot" ]; then
+        BUILD_RELEASE_TYPE=BETA
+        VENDOR=xiaomi
+        CODENAME=lancelot
+        GH_BOT_TOKEN=${GITHUB_TOKEN}
+        bash vendor/utils/pb_deploy.sh ${BUILD_RELEASE_TYPE} ${VENDOR} ${CODENAME}
+        fi
 
     - name: Get build information
       id: build_info
@@ -162,6 +173,9 @@ jobs:
         
         # Get file info
         RECOVERY_FILE="twrp-build/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img"
+        BUILDFILE=$(find twrp-build/out/target/product//${{ github.event.inputs.DEVICE_NAME }}}/*.zip)
+        echo "BUILDFILE=${BUILDFILE}" >> $GITHUB_ENV
+        
         if [ -f "$RECOVERY_FILE" ]; then
           FILE_SIZE=$(ls -lh "$RECOVERY_FILE" | awk '{print $5}')
           echo "FILE_SIZE=${FILE_SIZE}" >> $GITHUB_ENV
@@ -178,7 +192,9 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        files: twrp-build/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img
+        files: |
+          twrp-build/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img
+          ${{ env.BUILDFILE }}
         name: Recovery ${{ github.event.inputs.DEVICE_MODEL }}
         tag_name: recovery-${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_number }}
         body: |
