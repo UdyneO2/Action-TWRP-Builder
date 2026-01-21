@@ -228,15 +228,13 @@ jobs:
         # Clean previous builds
         make clean
         
-        # Build recovery
+        echo -e " Build recovery "
         if [ "${{ github.event.inputs.BUILD_TARGET }}" = "boot" ]; then
           make bootimage -j$(($(nproc)/2))
         else
           make recoveryimage -j$(($(nproc)/2))
         fi
         
-        # Also try to build recovery zip
-        make -j$(($(nproc)/2)) || true
       timeout-minutes: 120
 
     - name: List Output Files
