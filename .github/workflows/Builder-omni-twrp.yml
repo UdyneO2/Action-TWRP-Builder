@@ -251,11 +251,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: recovery-${{ github.event.inputs.DEVICE_NAME }}
-        path: |
-          ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img
-          ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.zip
-          ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.tar
-        if-no-files-found: error
+        path: ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img
         retention-days: 7
 
     - name: Create GitHub Release
@@ -263,7 +259,7 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*twrp*.zip
+          ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.zip
           ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.img
           ${{ env.workspace }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.tar
           
