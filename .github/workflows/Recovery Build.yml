@@ -136,15 +136,8 @@ jobs:
         export BUILD_HOSTNAME=ubuntu
         export BUILD_USERNAME=mnrdnn
         make ${{ github.event.inputs.MAKE_TARGET }} -j$(($(nproc --all) * 4))
-        ccache -s
-        
-        BUILD_RELEASE_TYPE=BETA
-        VENDOR=xiaomi
-        CODENAME=lancelot
-        GH_BOT_TOKEN=${{ secrets.GITHUB_TOKEN }}
-        bash vendor/utils/pb_deploy.sh ${BUILD_RELEASE_TYPE} ${VENDOR} ${CODENAME}
-        
-
+      
+      
     - name: Get build information
       id: build_info
       run: |
