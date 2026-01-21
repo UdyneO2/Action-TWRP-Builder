@@ -1,4 +1,4 @@
-name: Recovery Builder
+name: PBRP Builder
 
 on:
   workflow_dispatch:
@@ -134,7 +134,7 @@ jobs:
         lunch ${{ github.event.inputs.BTARGET }}-eng
         export BUILD_HOSTNAME=ubuntu
         export BUILD_USERNAME=mnrdnn
-        make ${{ github.event.inputs.MAKE_TARGET }} -j$(($(nproc --all) * 4))
+        mka pbrp -j$(($(nproc --all) * 4))
         
     - name: Get build information
       id: build_info
@@ -187,7 +187,7 @@ jobs:
         name: Recovery ${{ github.event.inputs.DEVICE_MODEL }}
         tag_name: recovery-${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_number }}
         body: |
-          # 📱 Recovery for ${{ github.event.inputs.DEVICE_MODEL }}
+          # 📱 PBRP for ${{ github.event.inputs.DEVICE_MODEL }}
           
           ## 📋 Device Information
           **Device Codename:** `${{ github.event.inputs.DEVICE_NAME }}`  
