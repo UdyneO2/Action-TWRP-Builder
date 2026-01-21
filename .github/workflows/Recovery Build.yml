@@ -60,7 +60,7 @@ jobs:
     - name: Set Swap Space
       uses: pierotofy/set-swap-space@master
       with:
-        swap-size-gb: 16
+        swap-size-gb: 20
 
     - name: Prepare the environment
       run: |
@@ -135,17 +135,15 @@ jobs:
         lunch ${{ github.event.inputs.BTARGET }}-eng
         export BUILD_HOSTNAME=ubuntu
         export BUILD_USERNAME=mnrdnn
-        make clean
-        make ${{ github.event.inputs.MAKE_TARGET }} -j$(($(nproc --all) * 2))
+        make ${{ github.event.inputs.MAKE_TARGET }} -j$(($(nproc --all) * 4))
         ccache -s
         
-        if [ -z "$BTARGET" == "pb_lancelot" ]; then
         BUILD_RELEASE_TYPE=BETA
         VENDOR=xiaomi
         CODENAME=lancelot
-        GH_BOT_TOKEN=${GITHUB_TOKEN}
+        GH_BOT_TOKEN=${{ secrets.GITHUB_TOKEN }}
         bash vendor/utils/pb_deploy.sh ${BUILD_RELEASE_TYPE} ${VENDOR} ${CODENAME}
-        fi
+        
 
     - name: Get build information
       id: build_info
@@ -173,7 +171,7 @@ jobs:
         
         # Get file info
         RECOVERY_FILE="twrp-build/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img"
-        BUILDFILE=$(find twrp-build/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.zip)
+        BUILDFILE="twrp-build/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.zip"
         echo "BUILDFILE=${BUILDFILE}" >> $GITHUB_ENV
         
         if [ -f "$RECOVERY_FILE" ]; then
