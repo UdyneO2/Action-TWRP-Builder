@@ -184,6 +184,7 @@ jobs:
           twrp-build/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.img
           twrp-build/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.zip
           twrp-build/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/kernel
+          twrp-build/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/obj/DTBO_OBJ/arch/arm64/boot/dtbo.img
         name: Recovery ${{ github.event.inputs.DEVICE_MODEL }}
         tag_name: recovery-${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_number }}
         body: |
